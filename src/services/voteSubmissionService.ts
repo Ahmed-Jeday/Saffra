@@ -20,10 +20,14 @@ export async function submitVoteToRelayer(params: {
   electionId: string;
   candidateId: number;
   proof: SemaphoreProofPayload;
+  idToken: string;
 }): Promise<VoteSubmission> {
   const response = await fetch(`${getRelayerUrl()}/vote`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${params.idToken}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       electionId: params.electionId,
       candidateId: params.candidateId,

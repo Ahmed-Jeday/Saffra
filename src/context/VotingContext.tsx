@@ -520,6 +520,7 @@ export function VotingProvider({ children }: { children: React.ReactNode }) {
           electionId,
           candidateId,
           proof,
+          idToken: session!.idToken,
         })
       : await submitVoteDirect({
           contractAddress: target.contractAddress,
@@ -566,22 +567,53 @@ export function VotingProvider({ children }: { children: React.ReactNode }) {
     return receipt;
   }
 
-  function setElectionPhase(electionId: string, phase: ElectionPhase) {
-    setElections((prev) =>
-      prev.map((el) => {
-        if (el.id !== electionId) return el;
-        if (phase === "registration" || el.queuedCommitments.length === 0) {
-          return { ...el, phase };
-        }
+  async function setElectionPhase(electionId: string, phase: ElectionPhase) {
+    const target = elections.find((e) => e.id === electionId);
+    if (!target) throw new Error("Élection introuvable.");
 
-        return {
-          ...el,
-          phase,
-          members: [...el.members, ...shuffleArray(el.queuedCommitments)],
-          queuedCommitments: [],
-        };
-      })
+    const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+    if (!apiUrl || !session?.idToken) {
+      throw new Error(
+        "Backend et session administrateur (Web3Auth) requis pour changer la phase."
+      );
+    }
+
+    // Time-travel réel : on déplace l'horloge de la chaîne Hardhat pour que
+    // block.timestamp franchisse la borne du contrat (startTime / endTime).
+    const now = Math.floor(Date.now() / 1000);
+    const toTimestamp =
+      phase === "registration"
+        ? target.startTime - 600
+        : phase === "voting"
+          ? target.startTime + 60
+          : target.endTime + 60;
+
+    const response = await fetch(
+      `${apiUrl.replace(/\/+$/, "")}/admin/time-travel`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ toTimestamp }),
+      }
     );
+    if (!response.ok) {
+      let detail = "";
+      try {
+        detail = ((await response.json()) as { error?: string }).error ?? "";
+      } catch {
+        // réponse non-JSON
+      }
+      throw new Error(
+        `Time-travel refusé par le backend (HTTP ${response.status}). ${detail}`.trim()
+      );
+    }
+
+    // La phase affichée est relue depuis la chaîne (source de vérité).
+    const refreshed = await loadElectionCatalog();
+    if (refreshed) setElections(refreshed);
   }
 
   async function createElection(payload: {
@@ -591,86 +623,84 @@ export function VotingProvider({ children }: { children: React.ReactNode }) {
     candidates: { name: string; department: string; program: string }[];
   }): Promise<Election> {
     const nextId = String(elections.length + 1);
-    const now = Math.floor(Date.now() / 1000);
-    const startTime = now ;
-    const endTime = now + 86400;
-
-    const candidateNames = payload.candidates.map((c) => c.name);
-
-    // ── Tentative de déploiement réel via le backend admin ──
-    const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
-    let contractAddress: string | null = null;
-    let groupId: string | null = null;
-
-    if (apiUrl && session?.idToken) {
+    // Référence temporelle = horloge de la chaîne (peut être avancée par time-travel).
+    let now = Math.floor(Date.now() / 1000);
+    const rpcUrl =
+      (import.meta.env.VITE_RPC_URL as string | undefined) ??
+      (import.meta.env.VITE_HARDHAT_RPC_URL as string | undefined);
+    if (rpcUrl) {
       try {
-        const response = await fetch(
-          `${apiUrl.replace(/\/+$/, "")}/admin/elections`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${session.idToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              electionId: nextId,
-              title: payload.title,
-              candidates: candidateNames,
-              startTime,
-              endTime,
-            }),
-          }
-        );
-        if (response.ok) {
-          const data = (await response.json()) as {
-            contractAddress?: string;
-            groupId?: string;
-          };
-          contractAddress = data.contractAddress ?? null;
-          // groupId est retourné par le backend si disponible
-          groupId = data.groupId ?? null;
-        }
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const latest = await provider.getBlock("latest");
+        if (latest) now = latest.timestamp;
       } catch {
-        // Backend non disponible → mode démo local (pas de déploiement réel)
+        // RPC indisponible → heure système
       }
     }
+    const startTime = now + 200;
+    const endTime = now + 86400;
 
-    // ── Fallback démo : adresse déterministe locale ──
-    if (!contractAddress) {
-      contractAddress = ethers.getCreateAddress({
-        from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        nonce: elections.length + 10,
-      });
+    const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+    if (!apiUrl) {
+      throw new Error("Backend non configuré (VITE_API_URL manquant).");
     }
-    if (!groupId) {
-      groupId = String(100 + elections.length + 1);
+    if (!session?.idToken) {
+      throw new Error("Connexion administrateur (Web3Auth) requise pour déployer.");
     }
 
-    const created: Election = {
-      id: nextId,
-      groupId,
-      contractAddress,
-      title: payload.title,
-      description: payload.description,
-      phase: "registration",
-      startTime,
-      endTime,
-      eligibleCount: payload.eligibleCount,
-      candidates: payload.candidates.map((c, idx) => ({
-        id: idx,
-        name: c.name,
-        department: c.department,
-        program: c.program,
-      })),
-      members: [],
-      queuedCommitments: [],
-      votes: payload.candidates.map(() => 0),
-      usedNullifiers: [],
-      events: [],
+    // ── Déploiement réel via le backend admin (pas de fallback démo) ──
+    const response = await fetch(
+      `${apiUrl.replace(/\/+$/, "")}/admin/elections`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          electionId: nextId,
+          title: payload.title,
+          candidates: payload.candidates.map((c) => c.name),
+          startTime,
+          endTime,
+        }),
+      }
+    );
+    if (!response.ok) {
+      let detail = "";
+      try {
+        detail = ((await response.json()) as { error?: string }).error ?? "";
+      } catch {
+        // réponse non-JSON
+      }
+      throw new Error(
+        `Déploiement refusé par le backend (HTTP ${response.status}). ${detail}`.trim()
+      );
+    }
+    const data = (await response.json()) as {
+      contractAddress?: string;
+      groupId?: string;
     };
+    if (!data.contractAddress) {
+      throw new Error("Le backend n'a pas retourné d'adresse de contrat.");
+    }
 
-    setElections((prev) => [...prev, created]);
-    setActiveElectionId(nextId);
+    // ── Le catalogue on-chain est la source de vérité : rechargement complet ──
+    const refreshed = await loadElectionCatalog();
+    if (!refreshed) {
+      throw new Error(
+        "Élection déployée mais le catalogue on-chain est indisponible (RPC absent)."
+      );
+    }
+    setElections(refreshed);
+    const created = refreshed.find(
+      (el) =>
+        el.contractAddress.toLowerCase() === data.contractAddress!.toLowerCase()
+    );
+    if (!created) {
+      throw new Error("Élection déployée mais introuvable dans le catalogue on-chain.");
+    }
+    setActiveElectionId(created.id);
     return created;
   }
 

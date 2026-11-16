@@ -135,7 +135,8 @@ npx hardhat node
 Dans un second terminal :
 ```bash
 cd voting-semaphore
-npx hardhat run scripts/deploy-semaphore.ts --network localhost
+npx hardhat run scripts/deploy-semaphore.ts --network localhost "old version"
+npm run deploy:all  "utlise cette commande"
 ```
 *Notez l'adresse déployée de Semaphore et reportez-la dans votre fichier `.env`.*
 

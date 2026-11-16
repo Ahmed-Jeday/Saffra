@@ -56,6 +56,7 @@ export function AdminPage() {
     setRelayerOnline,
     createElection,
     navigate,
+    session,
   } = useVoting();
 
   const [title, setTitle] = useState("Référendum Campus Numérique 2026");
@@ -69,6 +70,31 @@ export function AdminPage() {
   const [createdBanner, setCreatedBanner] = useState("");
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployError, setDeployError] = useState("");
+  const [phaseBusy, setPhaseBusy] = useState(false);
+  const [phaseFeedback, setPhaseFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  async function handlePhaseChange(phase: ElectionPhase) {
+    setPhaseBusy(true);
+    setPhaseFeedback(null);
+    try {
+      await setElectionPhase(activeElection.id, phase);
+      setPhaseFeedback({
+        type: "success",
+        message: `Phase on-chain mise à jour : « ${phase} » (block.timestamp avancé).`,
+      });
+    } catch (err) {
+      setPhaseFeedback({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Changement de phase impossible.",
+      });
+    } finally {
+      setPhaseBusy(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -249,7 +275,7 @@ export function AdminPage() {
             <div className="flex items-center gap-2.5">
               <Sliders size={19} className="text-[#E8AD00]" />
               <h2 className="font-heading text-lg font-bold text-[#171717]">
-                Contrôle des phases (Démo Hardhat)
+                Contrôle des phases (time-travel Hardhat réel)
               </h2>
             </div>
 
@@ -289,8 +315,9 @@ export function AdminPage() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setElectionPhase(activeElection.id, item.id)}
-                    className={`py-2 px-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    onClick={() => void handlePhaseChange(item.id)}
+                    disabled={phaseBusy}
+                    className={`py-2 px-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
                       activeElection.phase === item.id
                         ? "bg-[#FFC928] text-[#171717]"
                         : "text-[#77736B] hover:text-[#171717]"
@@ -300,6 +327,24 @@ export function AdminPage() {
                   </button>
                 ))}
               </div>
+
+              {phaseFeedback && (
+                <div
+                  className={`mt-3 rounded-xl px-3 py-2 text-xs border ${
+                    phaseFeedback.type === "success"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                      : "bg-red-50 border-red-200 text-red-900"
+                  }`}
+                >
+                  {phaseFeedback.message}
+                </div>
+              )}
+
+              <p className="text-[11px] text-[#77736B] mt-2 leading-relaxed">
+                L'horloge Hardhat ne peut qu'avancer. Pour revenir à
+                « Inscription », redéployez une élection avec une nouvelle
+                `startTime`. Connecté en tant que : {session?.email ?? "—"}.
+              </p>
             </div>
 
             <div className="pt-4 border-t border-[#171717]/8 flex items-center justify-between gap-4">

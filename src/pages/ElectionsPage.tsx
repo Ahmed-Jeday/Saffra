@@ -181,9 +181,15 @@ export function ElectionsPage() {
         activeElection.contractAddress,
         session!.signer.provider ?? undefined
       );
+      if (!onChainMembers.includes(localIdentity.commitment)) {
+        throw new Error(
+          "Votre commitment n'est pas encore inscrit on-chain. " +
+            "L'inscription doit être confirmée avant l'ouverture du scrutin."
+        );
+      }
       const proof = await buildSemaphoreVoteProof({
         identity: localIdentity,
-        groupMembers: onChainMembers.length > 0 ? onChainMembers : activeElection.members,
+        groupMembers: onChainMembers,
         candidateId: candId,
         groupId: activeElection.groupId,
         onStep: (label, percent) => setProofStep({ label, percent }),

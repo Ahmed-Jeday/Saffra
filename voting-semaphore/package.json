@@ -6,7 +6,8 @@
     "build": "hardhat build",
     "test": "hardhat test",
     "node": "hardhat node",
-    "deploy:local": "hardhat run scripts/deploy-semaphore.ts --network localhost"
+    "deploy:local": "hardhat run scripts/deploy-semaphore.ts --network localhost",
+    "deploy:all": "hardhat run scripts/deploy-all.ts --network localhost"
   },
   "keywords": [],
   "author": "",

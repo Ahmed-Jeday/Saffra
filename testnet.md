@@ -96,11 +96,9 @@ ELECTION_1_CONTRACT=""
 > ```
 > ✅ Aucune modification nécessaire.
 
-### 3.2 Adapter le script `deploy-all.ts` pour Sepolia
+### 3.2 Script de déploiement
 
-> [!WARNING]
-> Le script [deploy-all.ts](file:///c:/Users/ahmed/OneDrive/Documents/saffra-master/saffra-master/voting-semaphore/scripts/deploy-all.ts) utilise `network.create({ network: "localhost" })`.  
-> **Il faut le lancer avec `--network sepolia`** via la commande Hardhat, **OU** modifier la ligne `"localhost"` → `"sepolia"` avant d'exécuter.
+Le script `deploy-all.ts` utilise maintenant le réseau transmis à Hardhat avec `--network`. Il charge le `.env` de la racine du projet et refuse tout réseau autre que localhost et Sepolia.
 
 ### 3.3 Commandes de déploiement
 
@@ -112,7 +110,7 @@ cd voting-semaphore
 npx hardhat build
 
 # 3. Déployer sur Sepolia
-npx hardhat run scripts/deploy-all.ts --network sepolia
+npm run deploy:sepolia
 ```
 
 **Résultat attendu :**

@@ -2,7 +2,27 @@ import { network } from "hardhat";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const { viem } = await network.create({ network: "localhost" });
+const { viem } = await network.connect();
+const publicClient = await viem.getPublicClient();
+const chainId = await publicClient.getChainId();
+
+if (chainId !== 31337 && chainId !== 11155111) {
+  throw new Error(`Réseau non pris en charge pour le déploiement: chain ID ${chainId}`);
+}
+
+if (chainId === 11155111) {
+  if (!process.env.SEPOLIA_RPC_URL) {
+    throw new Error("Variable d'environnement manquante: SEPOLIA_RPC_URL");
+  }
+  if (!process.env.SEPOLIA_PRIVATE_KEY) {
+    throw new Error("Variable d'environnement manquante: SEPOLIA_PRIVATE_KEY");
+  }
+}
+
+const [deployer] = await viem.getWalletClients();
+if (!deployer) {
+  throw new Error("Aucun compte déployeur configuré pour ce réseau.");
+}
 
 // ── 1. Déploiement Semaphore (Poseidon + Verifier + Semaphore) ──
 const poseidon = await viem.deployContract("PoseidonT3");
@@ -23,8 +43,6 @@ console.log("Semaphore deployed at:", semaphore.address);
 const now = Math.floor(Date.now() / 1000);
 const startTime = now + 200;
 const endTime = startTime + 60 * 60 * 24;
-
-const [deployer] = await viem.getWalletClients();
 
 const voting = await viem.deployContract("Voting", [
   semaphore.address,

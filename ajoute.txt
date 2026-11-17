@@ -1,0 +1,33 @@
+## Rapport final
+
+Le script est configuré pour utiliser le réseau passé à Hardhat et la commande Sepolia est disponible. **Le déploiement n’est pas encore lançable** tant que les deux variables ci-dessous ne sont pas renseignées et que les dépendances Hardhat ne sont pas installées.
+
+### Variables à renseigner dans le `.env` à la racine
+
+```dotenv
+SEPOLIA_RPC_URL="https://eth-sepolia.g.alchemy.com/v2/VOTRE_CLE_ALCHEMY_SEPOLIA"
+SEPOLIA_PRIVATE_KEY="0xVOTRE_CLE_PRIVEE_DE_DEPLOIEMENT"
+```
+
+Utilisez une URL RPC **Sepolia**, pas mainnet. La clé privée doit appartenir à un portefeuille approvisionné en ETH de test Sepolia. **Ne la partagez pas et ne la commitez pas.** La clé RPC mainnet que vous avez partagée précédemment devrait être renouvelée.
+
+Après le déploiement, le script inscrira automatiquement `SEMAPHORE_ADDRESS` et `ELECTION_1_CONTRACT` dans le `.env`.
+
+### Commandes de déploiement
+
+Depuis la racine du projet :
+
+```bash
+cd voting-semaphore
+npm install
+npm run build
+npm run deploy:sepolia
+```
+
+La commande `deploy:sepolia` lance le script avec `--network sepolia`. Le script vérifie le réseau et les variables requises avant d’envoyer les transactions.
+
+### État des vérifications
+
+Le build frontend a réussi. Le build Hardhat n’a pas pu être vérifié car ses dépendances ne sont pas installées; le lint est également bloqué par cette absence. **Aucune transaction n’a été envoyée.**
+
+Fichiers concernés : `configuration Hardhat`, `script de déploiement` et `commande Sepolia`.
